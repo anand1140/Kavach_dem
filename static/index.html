@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KAVACH-DEM Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#0b1015; --panel:#121920; --panel2:#18212a; --line:#26323d; --txt:#d5dee6; --dim:#7f90a0;
+  --green:#3ddc84; --red:#ff4d5e; --cyan:#35d4e8; --amber:#ffb23e; --blue:#5b9dff;
+  --ui:'Chakra Petch',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.4 var(--ui);min-height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:18px;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+h1{font-size:22px;font-weight:700;letter-spacing:.06em}
+h1 small{display:block;font-size:11px;font-weight:500;color:var(--dim);letter-spacing:.02em}
+#coord{font:500 14px var(--mono);color:var(--cyan);flex:1;min-width:260px}
+.badge{padding:5px 12px;border:1px solid var(--line);border-radius:3px;font:600 13px var(--ui);background:var(--panel2)}
+.badge.scout{color:var(--green);border-color:#2c6b49}.badge.hold{color:var(--amber);border-color:#7a5a20}.badge.land{color:var(--red);border-color:#7a2a33}
+.btn{font:600 13px var(--ui);color:var(--txt);background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:8px 12px;cursor:pointer;text-align:left}
+.btn:hover{border-color:var(--blue)}.btn:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.btn.on{border-color:var(--cyan);box-shadow:inset 3px 0 var(--cyan)}
+.btn.danger:hover{border-color:var(--red)}
+main{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;padding:12px;flex:1}
+.left{grid-column:1/8}.right{grid-column:8/13;display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 12px}
+.panel h2{font-size:13px;font-weight:600;color:var(--dim);margin-bottom:8px}
+.maphead{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px;font-size:12px;color:var(--dim)}
+.key{display:flex;gap:12px;flex-wrap:wrap}.key i{display:inline-block;width:18px;height:0;border-top:3px solid;vertical-align:middle;margin-right:5px}
+#map{width:100%;aspect-ratio:1;display:block;background:#000;border:1px solid var(--line);border-radius:3px;z-index:1;}
+#alert{margin-top:8px;padding:8px 12px;border-radius:3px;font:500 13px var(--mono);border:1px solid #2c6b49;color:var(--green);background:#0f1f17}
+#alert.bad{border-color:#7a2a33;color:var(--red);background:#241216}
+.ew{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rng{margin-top:10px}.rng label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+.rng output{font:500 13px var(--mono);color:var(--amber)}
+input[type=range]{width:100%;accent-color:var(--amber)}
+.chartbox{height:190px;position:relative}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#hud{width:100%;aspect-ratio:1;display:block;background:#05080b;border:1px solid var(--line);border-radius:3px;object-fit:contain}
+.meter{margin-bottom:12px}.meter .row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+.meter .row b{font:500 13px var(--mono)}
+.bar{height:10px;background:#0b1015;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.bar div{height:100%;width:0;background:var(--green);transition:width .12s linear,background .2s}
+.pin{display:block;margin-top:8px;padding:6px 9px;border:1px solid var(--line);border-radius:3px;font:500 12px var(--mono);color:var(--dim);background:#0d1318}
+.pin.hot{color:var(--amber);border-color:var(--amber);box-shadow:0 0 10px rgba(255,178,62,.45);background:#221a0b}
+.pin.ok{color:var(--green);border-color:#2c6b49;box-shadow:0 0 8px rgba(61,220,132,.25)}
+.stat{display:flex;gap:16px;font:12px var(--mono);color:var(--dim);margin-top:6px;flex-wrap:wrap}.stat b{color:var(--txt);font-weight:500}
+dialog{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:14px;max-width:min(1040px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.7)}
+dialog img{width:100%;display:block;margin:10px 0;border-radius:3px}
+#conn{width:9px;height:9px;border-radius:50%;background:var(--red)}#conn.up{background:var(--green)}
+@media(max-width:1100px){.left,.right{grid-column:1/-1}}
+@media(max-width:560px){.split,.ew{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>KAVACH-DEM<small>Ladakh pass resilience console</small></h1>
+  <div id="coord">Waiting for telemetry</div>
+  <span id="conn" title="Telemetry link"></span>
+  <span id="fsm" class="badge">NO LINK</span>
+  <button class="btn" id="pcbBtn">Anti-Jamming PCB Schematic</button>
+</header>
+
+<main>
+  <section class="left panel">
+    <div class="maphead">
+      <span class="key">
+        <span><i style="border-color:var(--red);border-top-style:dashed"></i>Naive route</span>
+        <span><i style="border-color:var(--green)"></i>Slope-weighted A*</span>
+        <span><i style="border-color:var(--green);opacity:.55"></i>True UAV</span>
+        <span><i style="border-color:var(--red);border-top-style:dotted"></i>Spoofed GPS</span>
+        <span><i style="border-color:var(--cyan)"></i>Fused KF+VIO+TERCOM</span>
+      </span>
+    </div>
+    <div id="map"></div>
+    <div id="alert">GPS nominal</div>
+    <div class="stat" id="mapStat"></div>
+  </section>
+
+  <aside class="right">
+    <section class="panel">
+      <h2>Mission Control & Repositioning</h2>
+      <div class="ew">
+        <button class="btn" id="bStart">Reset Start (0%)</button>
+        <button class="btn" id="bMid">Jump Mid (50%)</button>
+        <button class="btn" id="bLand">Jump Landing (85%)</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Red-team electronic warfare</h2>
+      <div class="ew">
+        <button class="btn" data-mode="NONE" id="bNom">Nominal Mission</button>
+        <button class="btn danger" data-mode="INSTANT_SPOOF" id="bInst">Inject Instant Spoof</button>
+        <button class="btn danger" data-mode="GRADUAL_MEACONING" id="bGrad">Inject Gradual Pull-Off</button>
+        <button class="btn danger" id="bRec">Emergency UGV Deck Landing</button>
+      </div>
+      <div class="rng">
+        <label for="jam">RF Jamming Power (0 - 100 dBm) <output id="jamOut">0 dBm</output></label>
+        <input type="range" id="jam" min="0" max="100" value="0" step="1">
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Spoofing detection residuals</h2>
+      <div class="chartbox"><canvas id="chart"></canvas></div>
+      <div class="stat"><span>r_KF <b id="vKF">0.0 m</b></span><span>r_TERCOM <b id="vTC">0.0 m</b></span><span>nav <b id="vNav">-</b></span></div>
+    </section>
+
+    <section class="split">
+      <div class="panel">
+        <h2>Downward camera, ArUco lock</h2>
+        <img id="hud" alt="ArUco HUD" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+        <div class="stat" id="arStat"><span>no marker</span></div>
+      </div>
+      <div class="panel">
+        <h2>Virtual PCB hardware monitor</h2>
+        <div class="meter"><div class="row"><span>LNA AGC Voltage (V)</span><b id="agcV">1.80</b></div><div class="bar"><div id="agcB"></div></div></div>
+        <div class="meter"><div class="row"><span>C/N0 SNR (dB-Hz)</span><b id="cnV">47.0</b></div><div class="bar"><div id="cnB"></div></div></div>
+        <span class="pin" id="pinGpio">GPIO_PA14: LOW [2.4GHz PRIMARY]</span>
+        <span class="pin" id="pinSaw">SAW_NOTCH: BYPASS</span>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<dialog id="pcbDlg">
+  <strong>Anti-Jamming PCB Schematic</strong>
+  <img src="/static/pcb_schematic.png" alt="Anti-jamming GNSS front-end schematic">
+  <button class="btn" id="pcbClose">Close</button>
+</dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+let T = null, lastTick = -1;
+
+/* ---------- Leaflet Map Setup ---------- */
+const map = L.map('map', {
+  zoomControl: true,
+  attributionControl: false
+}).setView([34.2787, 77.6047], 13);
+
+const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 18
+}).addTo(map);
+
+const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+  maxZoom: 17,
+  opacity: 0.85
+});
+
+L.control.layers({
+  "Satellite Imagery": satelliteLayer,
+  "Topographic Contours": topoLayer
+}, {}, { position: 'topright' }).addTo(map);
+
+let naivePolyline = null;
+let resilientPolyline = null;
+let trueUavTrail = [];
+let spoofedGpsTrail = [];
+let fusedKfTrail = [];
+
+const truePathLine = L.polyline([], { color: '#3ddc84', weight: 2.5 }).addTo(map);
+const spoofLine = L.polyline([], { color: '#ff4d5e', weight: 2, dashArray: '4,5' }).addTo(map);
+const fusedLine = L.polyline([], { color: '#35d4e8', weight: 2.5 }).addTo(map);
+
+const ugvMarker = L.circleMarker([34.2787, 77.6047], { radius: 7, color: '#e8eef3', fillColor: '#f59e0b', fillOpacity: 1, weight: 2 }).addTo(map);
+const uavMarker = L.circleMarker([34.2787, 77.6047], { radius: 6, color: '#0b1015', fillColor: '#35d4e8', fillOpacity: 1, weight: 2 }).addTo(map);
+
+function gridToLatLng(x, y) {
+  const LAT0 = 34.2650, LON0 = 77.5900, DEG_STEP = 0.00035, GRID_N = 60;
+  const lat = LAT0 + (GRID_N - y) * DEG_STEP;
+  const lon = LON0 + x * DEG_STEP;
+  return [lat, lon];
+}
+
+fetch('/api/init_map').then(r => r.json()).then(m => {
+  if (m.naive_path) {
+    const latLngsNaive = m.naive_path.map(pt => gridToLatLng(pt[0], pt[1]));
+    naivePolyline = L.polyline(latLngsNaive, { color: '#ff4d5e', weight: 3, dashArray: '9,6' }).addTo(map);
+  }
+  if (m.resilient_path) {
+    const latLngsRes = m.resilient_path.map(pt => gridToLatLng(pt[0], pt[1]));
+    resilientPolyline = L.polyline(latLngsRes, { color: '#3ddc84', weight: 4 }).addTo(map);
+    map.fitBounds(resilientPolyline.getBounds(), { padding: [40, 40] });
+  }
+});
+
+function updateMapFromTelemetry(t) {
+  const ugvLatLng = gridToLatLng(t.ugv.grid.x, t.ugv.grid.y);
+  ugvMarker.setLatLng(ugvLatLng);
+
+  const uavTrueLatLng = gridToLatLng(t.uav.grid.x, t.uav.grid.y);
+  const uavNavLatLng = gridToLatLng(t.uav.nav_grid.x, t.uav.nav_grid.y);
+  uavMarker.setLatLng(uavTrueLatLng);
+
+  trueUavTrail.push(uavTrueLatLng);
+  fusedKfTrail.push(uavNavLatLng);
+  if (trueUavTrail.length > 500) trueUavTrail.shift();
+  if (fusedKfTrail.length > 500) fusedKfTrail.shift();
+
+  truePathLine.setLatLngs(trueUavTrail);
+  fusedLine.setLatLngs(fusedKfTrail);
+
+  if (t.uav.gps_reported && t.uav.gps_reported.offset_m > 5) {
+    const gpsLatLng = gridToLatLng(t.uav.gps_reported.grid.x, t.uav.gps_reported.grid.y);
+    spoofedGpsTrail.push(gpsLatLng);
+    if (spoofedGpsTrail.length > 500) spoofedGpsTrail.shift();
+    spoofLine.setLatLngs(spoofedGpsTrail);
+  } else {
+    spoofedGpsTrail = [];
+    spoofLine.setLatLngs([]);
+  }
+}
+
+// Click map to reposition UGV/UAV
+map.on('click', (e) => {
+  const LAT0 = 34.2650, LON0 = 77.5900, DEG_STEP = 0.00035, GRID_N = 60;
+  const gridX = (e.latlng.lng - LON0) / DEG_STEP;
+  const gridY = GRID_N - (e.latlng.lat - LAT0) / DEG_STEP;
+  fetch('/api/reposition', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ target_grid: [gridX, gridY] })
+  });
+});
+
+/* ---------- chart ---------- */
+const KF_TH = 6, TC_TH = 22, KF_CAP = 30, TC_CAP = 60, WIN = 240;
+const ds = (label, color, axis, dash, w) => ({label, data: [], borderColor: color, borderWidth: w || 2, pointRadius: 0, yAxisID: axis, borderDash: dash || [], tension: .15});
+const chart = new Chart($('chart'), {
+  type: 'line',
+  data: {labels: [], datasets: [ds('r_KF (m)', '#35d4e8', 'y'), ds('r_TERCOM (m)', '#ffb23e', 'y1'),
+    ds('KF threshold 6 m', '#ff4d5e', 'y', [6, 4], 1.5), ds('TERCOM threshold 22 m', '#ff4d5e', 'y1', [2, 3], 1.5)]},
+  options: {animation: false, maintainAspectRatio: false, interaction: {mode: 'index', intersect: false},
+    plugins: {legend: {labels: {color: '#9fb0be', boxWidth: 14, font: {size: 11}}}},
+    scales: {x: {display: false},
+      y: {min: 0, max: KF_CAP, position: 'left', title: {display: true, text: 'r_KF (m)', color: '#35d4e8'}, ticks: {color: '#7f90a0'}, grid: {color: '#222d37'}},
+      y1: {min: 0, max: TC_CAP, position: 'right', title: {display: true, text: 'r_TERCOM (m)', color: '#ffb23e'}, ticks: {color: '#7f90a0'}, grid: {display: false}}}}
+});
+let cn = 0;
+function pushChart(t) {
+  const d = chart.data;
+  d.labels.push(t.t); d.datasets[0].data.push(Math.min(t.r_KF, KF_CAP)); d.datasets[1].data.push(Math.min(t.r_TERCOM, TC_CAP));
+  d.datasets[2].data.push(KF_TH); d.datasets[3].data.push(TC_TH);
+  if (d.labels.length > WIN) { d.labels.shift(); d.datasets.forEach(s => s.data.shift()); }
+  if (++cn % 2 === 0) chart.update('none');
+}
+
+/* ---------- telemetry ---------- */
+const FSM = {NOMINAL_SCOUT: ['Nominal scout', 'scout'], VIO_HOLD_ISOLATED: ['VIO hold, GPS isolated', 'hold'], UGV_MOVING_DECK_LANDING: ['UGV moving-deck landing', 'land']};
+const f1 = (v, n = 1) => Number(v).toFixed(n);
+const setPin = (el, hot, text, cls) => { el.textContent = text; el.className = 'pin ' + (cls || (hot ? 'hot' : '')); };
+
+function onTelemetry(t) {
+  if (t.tick < lastTick) {
+    trueUavTrail.length = 0; spoofedGpsTrail.length = 0; fusedKfTrail.length = 0;
+    truePathLine.setLatLngs([]); spoofLine.setLatLngs([]); fusedLine.setLatLngs([]);
+  }
+  const fresh = t.tick !== lastTick; lastTick = t.tick; T = t;
+  
+  updateMapFromTelemetry(t);
+
+  if (fresh) {
+    pushChart(t);
+  }
+  const u = t.uav;
+  $('coord').textContent = `${f1(u.lat, 4)}\u00b0 N, ${f1(u.lon, 4)}\u00b0 E | ${Math.round(u.asl_m).toLocaleString()}m ASL`;
+  const [label, cls] = FSM[t.fsm.state] || [t.fsm.state, ''];
+  $('fsm').textContent = label; $('fsm').className = 'badge ' + cls;
+
+  const a = $('alert'), d = t.detector;
+  if (t.ugv.alert) { a.className = 'bad'; a.textContent = `${t.ugv.alert.alert} at cell (${t.ugv.alert.cell}), ${t.ugv.alert.slope_deg}\u00b0 slope. UGV halted.`; }
+  else if (d.confirmed) { a.className = 'bad'; a.textContent = `CONFIRMED SPOOFING ATTACK (${d.trigger}). GPS gain K=0, navigation locked on VIO. GPS offset ${f1(u.gps_reported.offset_m, 0)} m.`; }
+  else { a.className = ''; a.textContent = d.tripped ? 'Residual over threshold, confirming' : `GPS nominal. Fused position error ${f1(u.nav_error_m)} m`; }
+  a.id = 'alert';
+
+  $('vKF').textContent = f1(t.r_KF) + ' m'; $('vTC').textContent = f1(t.r_TERCOM) + ' m'; $('vNav').textContent = u.nav_source;
+  $('mapStat').innerHTML = `<span>UGV <b>${f1(t.ugv.asl_m, 0)} m, slope ${f1(t.ugv.slope_deg, 0)}\u00b0, ${f1(t.ugv.progress_pct, 0)}%</b></span><span>UAV to UGV <b>${f1(u.dist_to_ugv_m, 0)} m</b></span><span>t <b>${f1(t.t)} s</b></span>${u.landed ? '<span><b>LANDED ON DECK</b></span>' : ''}`;
+
+  if (t.aruco_hud_b64) $('hud').src = 'data:image/jpeg;base64,' + t.aruco_hud_b64;
+  const ar = t.aruco;
+  $('arStat').innerHTML = ar.detected ? `<span>ID ${ar.id} <b>dx ${ar.dx_px > 0 ? '+' : ''}${f1(ar.dx_px, 0)} dy ${ar.dy_px > 0 ? '+' : ''}${f1(ar.dy_px, 0)} px</b></span>` : '<span>no marker in view</span>';
+
+  const p = t.pcb, agcPct = Math.min(100, p.lna_agc_volts / 1.8 * 100), cnPct = Math.max(0, Math.min(100, (p.cn0_db_hz - 12) / 35 * 100));
+  $('agcV').textContent = f1(p.lna_agc_volts, 2); $('agcB').style.width = agcPct + '%'; $('agcB').style.background = p.lna_agc_volts < 0.85 ? 'var(--amber)' : 'var(--green)';
+  $('cnV').textContent = f1(p.cn0_db_hz); $('cnB').style.width = cnPct + '%'; $('cnB').style.background = p.cn0_db_hz < 30 ? 'var(--red)' : p.cn0_db_hz < 40 ? 'var(--amber)' : 'var(--green)';
+  const fhss = p.gpio_pa14_mux.startsWith('915');
+  setPin($('pinGpio'), fhss, fhss ? 'GPIO_PA14: HIGH [FHSS 915MHz]' : 'GPIO_PA14: LOW [2.4GHz PRIMARY]', fhss ? 'hot' : 'ok');
+  setPin($('pinSaw'), p.saw_notch_active, p.saw_notch_active ? 'SAW_NOTCH: ENGAGED' : 'SAW_NOTCH: BYPASS', p.saw_notch_active ? 'hot' : '');
+
+  document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === t.attack_mode));
+}
+
+function connect() {
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/telemetry`);
+  ws.onopen = () => $('conn').classList.add('up');
+  ws.onmessage = e => onTelemetry(JSON.parse(e.data));
+  ws.onclose = () => { $('conn').classList.remove('up'); $('fsm').textContent = 'NO LINK'; $('fsm').className = 'badge'; setTimeout(connect, 1500); };
+}
+connect();
+
+/* ---------- controls ---------- */
+const post = (url, body) => fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+$('bNom').onclick = async () => { await post('/api/reset'); await post('/api/attack', {attack_mode: 'NONE', jamming_dbm: 0}); $('jam').value = 0; $('jamOut').textContent = '0 dBm'; chart.data.labels.length = 0; chart.data.datasets.forEach(s => s.data.length = 0); };
+$('bInst').onclick = () => post('/api/attack', {attack_mode: 'INSTANT_SPOOF'});
+$('bGrad').onclick = () => post('/api/attack', {attack_mode: 'GRADUAL_MEACONING'});
+$('bRec').onclick = () => post('/api/attack', {force_recovery: true});
+
+/* Reposition controls */
+$('bStart').onclick = () => post('/api/reposition', {progress_pct: 0.0});
+$('bMid').onclick = () => post('/api/reposition', {progress_pct: 50.0});
+$('bLand').onclick = () => post('/api/reposition', {progress_pct: 85.0});
+
+let jt = 0;
+$('jam').oninput = e => {
+  $('jamOut').textContent = e.target.value + ' dBm';
+  clearTimeout(jt); jt = setTimeout(() => post('/api/attack', {jamming_dbm: +e.target.value}), 80);
+};
+$('pcbBtn').onclick = () => $('pcbDlg').showModal();
+$('pcbClose').onclick = () => $('pcbDlg').close();
+$('pcbDlg').onclick = e => { if (e.target === $('pcbDlg')) $('pcbDlg').close(); };
+</script>
+</body>
+</html>

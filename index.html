@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>KAVACH-DEM Mission Control</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#0b1015; --panel:#121920; --panel2:#18212a; --line:#26323d; --txt:#d5dee6; --dim:#7f90a0;
+  --green:#3ddc84; --red:#ff4d5e; --cyan:#35d4e8; --amber:#ffb23e; --blue:#5b9dff;
+  --ui:'Chakra Petch',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.4 var(--ui);min-height:100vh;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:18px;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+h1{font-size:22px;font-weight:700;letter-spacing:.06em}
+h1 small{display:block;font-size:11px;font-weight:500;color:var(--dim);letter-spacing:.02em}
+#coord{font:500 14px var(--mono);color:var(--cyan);flex:1;min-width:260px}
+.badge{padding:5px 12px;border:1px solid var(--line);border-radius:3px;font:600 13px var(--ui);background:var(--panel2)}
+.badge.scout{color:var(--green);border-color:#2c6b49}.badge.hold{color:var(--amber);border-color:#7a5a20}.badge.land{color:var(--red);border-color:#7a2a33}
+.btn{font:600 13px var(--ui);color:var(--txt);background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:8px 12px;cursor:pointer;text-align:left}
+.btn:hover{border-color:var(--blue)}.btn:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.btn.on{border-color:var(--cyan);box-shadow:inset 3px 0 var(--cyan)}
+.btn.danger:hover{border-color:var(--red)}
+main{display:grid;grid-template-columns:repeat(12,1fr);gap:12px;padding:12px;flex:1}
+.left{grid-column:1/8}.right{grid-column:8/13;display:flex;flex-direction:column;gap:12px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:10px 12px}
+.panel h2{font-size:13px;font-weight:600;color:var(--dim);margin-bottom:8px}
+.maphead{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:8px;font-size:12px;color:var(--dim)}
+.sw{display:flex;align-items:center;gap:8px;color:var(--txt);cursor:pointer;font-size:13px}
+.sw input{appearance:none;width:34px;height:18px;border-radius:9px;background:#2a3642;position:relative;cursor:pointer;transition:background .15s}
+.sw input::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:#cfd8df;transition:transform .15s}
+.sw input:checked{background:#a8283a}.sw input:checked::after{transform:translateX(16px)}
+.key{display:flex;gap:12px;flex-wrap:wrap}.key i{display:inline-block;width:18px;height:0;border-top:3px solid;vertical-align:middle;margin-right:5px}
+#map{width:100%;aspect-ratio:1;display:block;background:#000;border:1px solid var(--line);border-radius:3px}
+#alert{margin-top:8px;padding:8px 12px;border-radius:3px;font:500 13px var(--mono);border:1px solid #2c6b49;color:var(--green);background:#0f1f17}
+#alert.bad{border-color:#7a2a33;color:var(--red);background:#241216}
+.ew{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.rng{margin-top:10px}.rng label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px}
+.rng output{font:500 13px var(--mono);color:var(--amber)}
+input[type=range]{width:100%;accent-color:var(--amber)}
+.chartbox{height:190px;position:relative}
+.split{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+#hud{width:100%;aspect-ratio:1;display:block;background:#05080b;border:1px solid var(--line);border-radius:3px;object-fit:contain}
+.meter{margin-bottom:12px}.meter .row{display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px}
+.meter .row b{font:500 13px var(--mono)}
+.bar{height:10px;background:#0b1015;border:1px solid var(--line);border-radius:2px;overflow:hidden}
+.bar div{height:100%;width:0;background:var(--green);transition:width .12s linear,background .2s}
+.pin{display:block;margin-top:8px;padding:6px 9px;border:1px solid var(--line);border-radius:3px;font:500 12px var(--mono);color:var(--dim);background:#0d1318}
+.pin.hot{color:var(--amber);border-color:var(--amber);box-shadow:0 0 10px rgba(255,178,62,.45);background:#221a0b}
+.pin.ok{color:var(--green);border-color:#2c6b49;box-shadow:0 0 8px rgba(61,220,132,.25)}
+.stat{display:flex;gap:16px;font:12px var(--mono);color:var(--dim);margin-top:6px;flex-wrap:wrap}.stat b{color:var(--txt);font-weight:500}
+dialog{background:var(--panel);color:var(--txt);border:1px solid var(--line);border-radius:6px;padding:14px;max-width:min(1040px,94vw)}
+dialog::backdrop{background:rgba(0,0,0,.7)}
+dialog img{width:100%;display:block;margin:10px 0;border-radius:3px}
+#conn{width:9px;height:9px;border-radius:50%;background:var(--red)}#conn.up{background:var(--green)}
+@media(max-width:1100px){.left,.right{grid-column:1/-1}}
+@media(max-width:560px){.split,.ew{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>KAVACH-DEM<small>Ladakh pass resilience console</small></h1>
+  <div id="coord">Waiting for telemetry</div>
+  <span id="conn" title="Telemetry link"></span>
+  <span id="fsm" class="badge">NO LINK</span>
+  <button class="btn" id="pcbBtn">Anti-Jamming PCB Schematic</button>
+</header>
+
+<main>
+  <section class="left panel">
+    <div class="maphead">
+      <label class="sw"><input type="checkbox" id="heatSw"> Show Slope Danger Heatmap Overlay</label>
+      <span class="key">
+        <span><i style="border-color:var(--red);border-top-style:dashed"></i>Naive route</span>
+        <span><i style="border-color:var(--green)"></i>Slope-weighted A*</span>
+        <span><i style="border-color:var(--green);opacity:.55"></i>True UAV</span>
+        <span><i style="border-color:var(--red);border-top-style:dotted"></i>Spoofed GPS</span>
+        <span><i style="border-color:var(--cyan)"></i>Fused KF+VIO+TERCOM</span>
+      </span>
+    </div>
+    <div id="map" style="width: 100%; height: 100%; min-height: 550px; border-radius: 0.5rem; z-index: 1;"></div>
+    <div id="alert">GPS nominal</div>
+    <div class="stat" id="mapStat"></div>
+  </section>
+
+  <aside class="right">
+    <section class="panel">
+      <h2>Red-team electronic warfare</h2>
+      <div class="ew">
+        <button class="btn" data-mode="NONE" id="bNom">Nominal Mission</button>
+        <button class="btn danger" data-mode="INSTANT_SPOOF" id="bInst">Inject Instant GPS Spoof</button>
+        <button class="btn danger" data-mode="GRADUAL_MEACONING" id="bGrad">Inject Gradual Pull-Off</button>
+        <button class="btn danger" id="bRec">Emergency UGV Deck Landing</button>
+      </div>
+      <div class="rng">
+        <label for="jam">RF Jamming Power (0 - 100 dBm) <output id="jamOut">0 dBm</output></label>
+        <input type="range" id="jam" min="0" max="100" value="0" step="1">
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Spoofing detection residuals</h2>
+      <div class="chartbox"><canvas id="chart"></canvas></div>
+      <div class="stat"><span>r_KF <b id="vKF">0.0 m</b></span><span>r_TERCOM <b id="vTC">0.0 m</b></span><span>nav <b id="vNav">-</b></span></div>
+    </section>
+
+    <section class="split">
+      <div class="panel">
+        <h2>Downward camera, ArUco lock</h2>
+        <img id="hud" alt="ArUco HUD" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==">
+        <div class="stat" id="arStat"><span>no marker</span></div>
+      </div>
+      <div class="panel">
+        <h2>Virtual PCB hardware monitor</h2>
+        <div class="meter"><div class="row"><span>LNA AGC Voltage (V)</span><b id="agcV">1.80</b></div><div class="bar"><div id="agcB"></div></div></div>
+        <div class="meter"><div class="row"><span>C/N0 SNR (dB-Hz)</span><b id="cnV">47.0</b></div><div class="bar"><div id="cnB"></div></div></div>
+        <span class="pin" id="pinGpio">GPIO_PA14: LOW [2.4GHz PRIMARY]</span>
+        <span class="pin" id="pinSaw">SAW_NOTCH: BYPASS</span>
+      </div>
+    </section>
+  </aside>
+</main>
+
+<dialog id="pcbDlg">
+  <strong>Anti-Jamming PCB Schematic</strong>
+  <img src="/static/pcb_schematic.png" alt="Anti-jamming GNSS front-end schematic">
+  <button class="btn" id="pcbClose">Close</button>
+</dialog>
+
+<script>
+const $ = id => document.getElementById(id);
+const N = 60, cv = $('map'), ctx = cv.getContext('2d'), W = cv.width, CS = W / N;
+const P = (x, y) => [(x + .5) * CS, (y + .5) * CS];
+const sat = new Image(); sat.src = '/static/ladakh_sat.jpg';
+let MAP = null, heat = null, T = null, lastTick = -1;
+const trail = {tru: [], gps: [], nav: []}, TRAIL_MAX = 500;
+const disp = {ugv: null, uav: null, gps: null};
+
+/* ---------- map setup ---------- */
+fetch('/api/init_map').then(r => r.json()).then(m => {
+  MAP = m; heat = document.createElement('canvas'); heat.width = heat.height = W;
+  const h = heat.getContext('2d');
+  m.slope.forEach((row, y) => row.forEach((s, x) => {
+    if (s > m.slope_limit_deg) {
+      h.fillStyle = `rgba(220,20,60,${0.28 + 0.4 * Math.min(1, (s - m.slope_limit_deg) / 20)})`;
+      h.fillRect(x * CS, y * CS, CS + .5, CS + .5);
+    }
+  }));
+});
+
+function line(path, color, w, dash) {
+  if (!path || path.length < 2) return;
+  ctx.beginPath(); ctx.setLineDash(dash || []); ctx.strokeStyle = color; ctx.lineWidth = w;
+  path.forEach((p, i) => { const [a, b] = Array.isArray(p) ? P(p[0], p[1]) : P(p.x, p.y); i ? ctx.lineTo(a, b) : ctx.moveTo(a, b); });
+  ctx.stroke(); ctx.setLineDash([]);
+}
+function lerp(o, t, k) { return o ? {x: o.x + (t.x - o.x) * k, y: o.y + (t.y - o.y) * k} : {...t}; }
+
+function draw() {
+  requestAnimationFrame(draw);
+  ctx.clearRect(0, 0, W, W);
+  if (sat.complete && sat.naturalWidth) ctx.drawImage(sat, 0, 0, W, W);
+  else { ctx.fillStyle = '#1a232b'; ctx.fillRect(0, 0, W, W); }
+  if (!MAP) return;
+  if ($('heatSw').checked && heat) ctx.drawImage(heat, 0, 0);
+  ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.fillRect(0, 0, W, W);
+
+  line(MAP.naive_path, '#ff4d5e', 3, [9, 6]);
+  line(MAP.resilient_path, '#3ddc84', 4);
+  const hz = MAP.naive_hazard;
+  if (hz) {
+    const [hx, hy] = P(hz.cell[0], hz.cell[1]);
+    ctx.fillStyle = '#240b10'; ctx.strokeStyle = '#ff4d5e'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(hx, hy, 15, 0, 7); ctx.fill(); ctx.stroke();
+    ctx.font = '20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#fff';
+    ctx.fillText('\u2620', hx, hy + 1);
+    ctx.font = '12px "IBM Plex Mono",monospace'; ctx.fillStyle = '#ff9aa4';
+    ctx.fillText(`${hz.slope_deg}\u00b0 cliff`, hx, hy - 24);
+  }
+  const [sx, sy] = P(...MAP.start), [bx, by] = P(...MAP.base_camp);
+  ctx.font = '12px "IBM Plex Mono",monospace'; ctx.textAlign = 'left'; ctx.fillStyle = '#fff';
+  ctx.fillRect(sx - 4, sy - 4, 8, 8); ctx.fillText('Start', sx + 8, sy + 4);
+  ctx.beginPath(); ctx.arc(bx, by, 7, 0, 7); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke(); ctx.fillText('Base Camp', bx - 70, by - 12);
+
+  line(trail.gps, '#ff4d5e', 2, [4, 5]);
+  line(trail.tru, 'rgba(61,220,132,.95)', 2.5);
+  line(trail.nav, '#35d4e8', 2.5);
+  if (!T) return;
+
+  disp.ugv = lerp(disp.ugv, T.ugv.grid, .3); disp.uav = lerp(disp.uav, T.uav.grid, .3);
+  disp.gps = lerp(disp.gps, T.uav.gps_reported.grid, .3);
+  if (T.uav.gps_reported.offset_m > 5) {                    // spoofed fix ghost
+    const [gx, gy] = P(disp.gps.x, disp.gps.y);
+    ctx.strokeStyle = '#ff4d5e'; ctx.lineWidth = 2; ctx.beginPath();
+    ctx.moveTo(gx - 7, gy - 7); ctx.lineTo(gx + 7, gy + 7); ctx.moveTo(gx + 7, gy - 7); ctx.lineTo(gx - 7, gy + 7); ctx.stroke();
+    const [ux, uy] = P(disp.uav.x, disp.uav.y); ctx.setLineDash([3, 4]); ctx.beginPath(); ctx.moveTo(ux, uy); ctx.lineTo(gx, gy); ctx.stroke(); ctx.setLineDash([]);
+  }
+  const [cx, cy] = P(disp.ugv.x, disp.ugv.y);                 // UGV convoy marker
+  ctx.fillStyle = T.ugv.halted ? '#ff4d5e' : '#e8eef3'; ctx.strokeStyle = '#0b1015'; ctx.lineWidth = 2;
+  ctx.fillRect(cx - 9, cy - 6, 18, 12); ctx.strokeRect(cx - 9, cy - 6, 18, 12);
+  ctx.fillStyle = '#0b1015'; ctx.fillRect(cx - 4, cy - 3, 8, 6);
+  ctx.fillStyle = '#fff'; ctx.font = '12px "IBM Plex Mono",monospace'; ctx.textAlign = 'left'; ctx.fillText('UGV', cx + 13, cy + 4);
+
+  const [ax, ay] = P(disp.uav.x, disp.uav.y), hd = T.uav.heading_deg * Math.PI / 180;   // UAV scout marker
+  ctx.save(); ctx.translate(ax, ay); ctx.rotate(hd);
+  ctx.fillStyle = '#35d4e8'; ctx.strokeStyle = '#0b1015'; ctx.beginPath();
+  ctx.moveTo(0, -11); ctx.lineTo(8, 9); ctx.lineTo(0, 5); ctx.lineTo(-8, 9); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
+  ctx.fillStyle = '#fff'; ctx.fillText(`UAV ${T.uav.agl_m.toFixed(0)}m AGL`, ax + 13, ay + 4);
+}
+draw();
+
+/* ---------- chart ---------- */
+const KF_TH = 6, TC_TH = 22, KF_CAP = 30, TC_CAP = 60, WIN = 240;
+const ds = (label, color, axis, dash, w) => ({label, data: [], borderColor: color, borderWidth: w || 2, pointRadius: 0, yAxisID: axis, borderDash: dash || [], tension: .15});
+const chart = new Chart($('chart'), {
+  type: 'line',
+  data: {labels: [], datasets: [ds('r_KF (m)', '#35d4e8', 'y'), ds('r_TERCOM (m)', '#ffb23e', 'y1'),
+    ds('KF threshold 6 m', '#ff4d5e', 'y', [6, 4], 1.5), ds('TERCOM threshold 22 m', '#ff4d5e', 'y1', [2, 3], 1.5)]},
+  options: {animation: false, maintainAspectRatio: false, interaction: {mode: 'index', intersect: false},
+    plugins: {legend: {labels: {color: '#9fb0be', boxWidth: 14, font: {size: 11}}}},
+    scales: {x: {display: false},
+      y: {min: 0, max: KF_CAP, position: 'left', title: {display: true, text: 'r_KF (m)', color: '#35d4e8'}, ticks: {color: '#7f90a0'}, grid: {color: '#222d37'}},
+      y1: {min: 0, max: TC_CAP, position: 'right', title: {display: true, text: 'r_TERCOM (m)', color: '#ffb23e'}, ticks: {color: '#7f90a0'}, grid: {display: false}}}}
+});
+let cn = 0;
+function pushChart(t) {
+  const d = chart.data;
+  d.labels.push(t.t); d.datasets[0].data.push(Math.min(t.r_KF, KF_CAP)); d.datasets[1].data.push(Math.min(t.r_TERCOM, TC_CAP));
+  d.datasets[2].data.push(KF_TH); d.datasets[3].data.push(TC_TH);
+  if (d.labels.length > WIN) { d.labels.shift(); d.datasets.forEach(s => s.data.shift()); }
+  if (++cn % 2 === 0) chart.update('none');
+}
+
+/* ---------- telemetry ---------- */
+const FSM = {NOMINAL_SCOUT: ['Nominal scout', 'scout'], VIO_HOLD_ISOLATED: ['VIO hold, GPS isolated', 'hold'], UGV_MOVING_DECK_LANDING: ['UGV moving-deck landing', 'land']};
+const f1 = (v, n = 1) => Number(v).toFixed(n);
+const setPin = (el, hot, text, cls) => { el.textContent = text; el.className = 'pin ' + (cls || (hot ? 'hot' : '')); };
+
+function onTelemetry(t) {
+  if (t.tick < lastTick) for (const k in trail) trail[k].length = 0;      // scenario was reset
+  const fresh = t.tick !== lastTick; lastTick = t.tick; T = t;
+  if (fresh) {
+    trail.tru.push(t.uav.grid); trail.gps.push(t.uav.gps_reported.grid); trail.nav.push(t.uav.nav_grid);
+    for (const k in trail) if (trail[k].length > TRAIL_MAX) trail[k].shift();
+    pushChart(t);
+  }
+  const u = t.uav;
+  $('coord').textContent = `${f1(u.lat, 4)}\u00b0 N, ${f1(u.lon, 4)}\u00b0 E | ${Math.round(u.asl_m).toLocaleString()}m ASL`;
+  const [label, cls] = FSM[t.fsm.state] || [t.fsm.state, ''];
+  $('fsm').textContent = label; $('fsm').className = 'badge ' + cls;
+
+  const a = $('alert'), d = t.detector;
+  if (t.ugv.alert) { a.className = 'bad'; a.textContent = `${t.ugv.alert.alert} at cell (${t.ugv.alert.cell}), ${t.ugv.alert.slope_deg}\u00b0 slope. UGV halted.`; }
+  else if (d.confirmed) { a.className = 'bad'; a.textContent = `CONFIRMED SPOOFING ATTACK (${d.trigger}). GPS gain K=0, navigation locked on VIO. GPS offset ${f1(u.gps_reported.offset_m, 0)} m.`; }
+  else { a.className = ''; a.textContent = d.tripped ? 'Residual over threshold, confirming' : `GPS nominal. Fused position error ${f1(u.nav_error_m)} m`; }
+  a.id = 'alert';
+
+  $('vKF').textContent = f1(t.r_KF) + ' m'; $('vTC').textContent = f1(t.r_TERCOM) + ' m'; $('vNav').textContent = u.nav_source;
+  $('mapStat').innerHTML = `<span>UGV <b>${f1(t.ugv.asl_m, 0)} m, slope ${f1(t.ugv.slope_deg, 0)}\u00b0, ${f1(t.ugv.progress_pct, 0)}%</b></span><span>UAV to UGV <b>${f1(u.dist_to_ugv_m, 0)} m</b></span><span>t <b>${f1(t.t)} s</b></span>${u.landed ? '<span><b>LANDED ON DECK</b></span>' : ''}`;
+
+  if (t.aruco_hud_b64) $('hud').src = 'data:image/jpeg;base64,' + t.aruco_hud_b64;
+  const ar = t.aruco;
+  $('arStat').innerHTML = ar.detected ? `<span>ID ${ar.id} <b>dx ${ar.dx_px > 0 ? '+' : ''}${f1(ar.dx_px, 0)} dy ${ar.dy_px > 0 ? '+' : ''}${f1(ar.dy_px, 0)} px</b></span>` : '<span>no marker in view</span>';
+
+  const p = t.pcb, agcPct = Math.min(100, p.lna_agc_volts / 1.8 * 100), cnPct = Math.max(0, Math.min(100, (p.cn0_db_hz - 12) / 35 * 100));
+  $('agcV').textContent = f1(p.lna_agc_volts, 2); $('agcB').style.width = agcPct + '%'; $('agcB').style.background = p.lna_agc_volts < 0.85 ? 'var(--amber)' : 'var(--green)';
+  $('cnV').textContent = f1(p.cn0_db_hz); $('cnB').style.width = cnPct + '%'; $('cnB').style.background = p.cn0_db_hz < 30 ? 'var(--red)' : p.cn0_db_hz < 40 ? 'var(--amber)' : 'var(--green)';
+  const fhss = p.gpio_pa14_mux.startsWith('915');
+  setPin($('pinGpio'), fhss, fhss ? 'GPIO_PA14: HIGH [FHSS 915MHz]' : 'GPIO_PA14: LOW [2.4GHz PRIMARY]', fhss ? 'hot' : 'ok');
+  setPin($('pinSaw'), p.saw_notch_active, p.saw_notch_active ? 'SAW_NOTCH: ENGAGED' : 'SAW_NOTCH: BYPASS', p.saw_notch_active ? 'hot' : '');
+
+  document.querySelectorAll('[data-mode]').forEach(b => b.classList.toggle('on', b.dataset.mode === t.attack_mode));
+}
+
+function connect() {
+  const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/telemetry`);
+  ws.onopen = () => $('conn').classList.add('up');
+  ws.onmessage = e => onTelemetry(JSON.parse(e.data));
+  ws.onclose = () => { $('conn').classList.remove('up'); $('fsm').textContent = 'NO LINK'; $('fsm').className = 'badge'; setTimeout(connect, 1500); };
+}
+connect();
+
+/* ---------- controls ---------- */
+const post = (url, body) => fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: body ? JSON.stringify(body) : undefined});
+$('bNom').onclick = async () => { await post('/api/reset'); await post('/api/attack', {attack_mode: 'NONE', jamming_dbm: 0}); $('jam').value = 0; $('jamOut').textContent = '0 dBm'; chart.data.labels.length = 0; chart.data.datasets.forEach(s => s.data.length = 0); };
+$('bInst').onclick = () => post('/api/attack', {attack_mode: 'INSTANT_SPOOF'});
+$('bGrad').onclick = () => post('/api/attack', {attack_mode: 'GRADUAL_MEACONING'});
+$('bRec').onclick = () => post('/api/attack', {force_recovery: true});
+let jt = 0;
+$('jam').oninput = e => {
+  $('jamOut').textContent = e.target.value + ' dBm';
+  clearTimeout(jt); jt = setTimeout(() => post('/api/attack', {jamming_dbm: +e.target.value}), 80);
+};
+$('pcbBtn').onclick = () => $('pcbDlg').showModal();
+$('pcbClose').onclick = () => $('pcbDlg').close();
+$('pcbDlg').onclick = e => { if (e.target === $('pcbDlg')) $('pcbDlg').close(); };
+</script>
+</body>
+</html>
